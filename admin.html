@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Golf Admin</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+body{
+font-family:Arial;
+background:#111;
+color:white;
+padding:15px;
+}
+
+.card{
+background:#222;
+padding:10px;
+margin:10px 0;
+border-radius:10px;
+}
+
+input,button,select{
+padding:8px;
+margin:5px;
+}
+
+button{
+background:green;
+color:white;
+border:none;
+border-radius:6px;
+cursor:pointer;
+}
+
+.playerCard{
+background:#1b1b1b;
+padding:10px;
+margin:8px 0;
+border-radius:8px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>⛳ Golf Admin (Clean)</h1>
+
+<div class="card">
+<h3>Tournament Name</h3>
+<input id="tName">
+<button onclick="saveName()">Save</button>
+</div>
+
+<div class="card">
+<h3>Holes</h3>
+<input id="parInput" placeholder="Par (3,4,5)">
+<button onclick="addHole()">Add Hole</button>
+<div id="holes"></div>
+</div>
+
+<div class="card">
+<h3>Groups</h3>
+<input id="groupInput" placeholder="Group name">
+<button onclick="addGroup()">Add Group</button>
+<div id="groups"></div>
+</div>
+
+<div class="card">
+<button onclick="resetAll()" style="background:red">RESET ALL</button>
+</div>
+
+<script>
+
+//////////////////////////////////////////////////////
+// FIREBASE
+//////////////////////////////////////////////////////
+
+const firebaseConfig = {
+ apiKey: "AIzaSyAiPxqKG7ZWEpfZA-PPAfBF2ov2YLdH2KQ",
+ authDomain: "golf-tournament123.firebaseapp.com",
+ projectId: "golf-tournament123",
+ storageBucket: "golf-tournament123.firebasestorage.app",
+ messagingSenderId: "1090785165873",
+ appId: "1:1090785165873:web:d1db71353eaa39ebb5cb10"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+//////////////////////////////////////////////////////
+// DATA
+//////////////////////////////////////////////////////
+
+let data = {
+tournamentName:"",
+holes:[],
+groups:[]
+};
+
+//////////////////////////////////////////////////////
+// LOAD
+//////////////////////////////////////////////////////
+
+db.collection("tournament").doc("main")
+.onSnapshot(doc=>{
+if(doc.exists) data = doc.data();
+render();
+});
+
+//////////////////////////////////////////////////////
+// SAVE
+//////////////////////////////////////////////////////
+
+function save(){
+db.collection("tournament").doc("main").set(data);
+}
+
+//////////////////////////////////////////////////////
+// NAME
+//////////////////////////////////////////////////////
+
+function saveName(){
+data.tournamentName = document.getElementById("tName").value;
+save();
+}
+
+//////////////////////////////////////////////////////
+// HOLES
+//////////////////////////////////////////////////////
+
+function addHole(){
+let par = document.getElementById("parInput").value;
+if(!par) return;
+
+data.holes.push({par:Number(par)});
+document.getElementById("parInput").value="";
+save();
+}
+
+//////////////////////////////////////////////////////
+// GROUPS
+//////////////////////////////////////////////////////
+
+function addGroup(){
+let name = document.getElementById("groupInput").value;
+if(!name) return;
+
+data.groups.push({
+name,
+players:[]
+});
+
+document.getElementById("groupInput").value="";
+save();
+}
+
+//////////////////////////////////////////////////////
+// ADD PLAYER
+//////////////////////////////////////////////////////
+
+function addPlayer(g){
+let name = prompt("Player name:");
+if(!name) return;
+
+data.groups[g].players.push({
+name,
+scores:[],
+lockedHoles:[]
+});
+
+save();
+}
+
+//////////////////////////////////////////////////////
+// ACTION (LOCK / UNLOCK)
+//////////////////////////////////////////////////////
+
+function handleAction(g,p,value){
+
+if(!value) return;
+
+let player = data.groups[g].players[p];
+
+if(!player.lockedHoles){
+player.lockedHoles=[];
+}
+
+let [action, hi] = value.split("-");
+hi = Number(hi);
+
+if(action === "lock"){
+player.lockedHoles[hi] = true;
+}
+
+if(action === "unlock"){
+player.lockedHoles[hi] = false;
+}
+
+save();
+}
+
+//////////////////////////////////////////////////////
+// RESET
+//////////////////////////////////////////////////////
+
+function resetAll(){
+if(confirm("RESET EVERYTHING?")){
+data = {tournamentName:"",holes:[],groups:[]};
+save();
+}
+}
+
+//////////////////////////////////////////////////////
+// RENDER
+//////////////////////////////////////////////////////
+
+function render(){
+
+document.getElementById("tName").value = data.tournamentName || "";
+
+/* HOLES */
+let h="";
+(data.holes||[]).forEach((x,i)=>{
+h+=`<div>Hole ${i+1} Par ${x.par}</div>`;
+});
+document.getElementById("holes").innerHTML=h;
+
+/* GROUPS */
+let g="";
+
+(data.groups||[]).forEach((gr,gi)=>{
+
+g+=`
+<div class="card">
+<h3>${gr.name}</h3>
+<button onclick="addPlayer(${gi})">Add Player</button>
+`;
+
+(gr.players||[]).forEach((p,pi)=>{
+
+g+=`
+<div class="playerCard">
+<b>${p.name}</b><br>
+
+<select onchange="handleAction(${gi},${pi},this.value)">
+<option value="">-- Hole Actions --</option>
+`;
+
+(data.holes||[]).forEach((h,hi)=>{
+
+g+=`
+<option value="lock-${hi}">Lock Hole ${hi+1}</option>
+<option value="unlock-${hi}">Unlock Hole ${hi+1}</option>
+`;
+
+});
+
+g+=`
+</select>
+</div>
+`;
+});
+
+g+=`</div>`;
+});
+
+document.getElementById("groups").innerHTML=g;
+
+}
+
+</script>
+
+</body>
+</html>

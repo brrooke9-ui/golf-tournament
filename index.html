@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Golf Tournament</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<style>
+body{
+font-family:Arial;
+background:#0b3d0b;
+color:white;
+margin:0;
+padding:10px;
+text-align:center;
+}
+
+h1{margin:10px 0}
+
+.card{
+background:rgba(255,255,255,0.08);
+margin:10px 0;
+padding:10px;
+border-radius:10px;
+}
+
+.playerRow{
+background:rgba(0,0,0,0.25);
+margin:8px 0;
+padding:10px;
+border-radius:10px;
+}
+
+select,button{
+padding:6px;
+margin:3px;
+border:none;
+border-radius:6px;
+font-size:14px;
+}
+
+button{
+background:#ffcc00;
+font-weight:bold;
+}
+
+.locked{
+opacity:0.5;
+}
+
+.leader{
+color:#00ff88;
+font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<h1>⛳ Tournament</h1>
+<h2 id="title">Loading...</h2>
+
+<div class="card">
+<h3>🏆 Live Leaderboard</h3>
+<div id="leaderboard">Loading...</div>
+</div>
+
+<div id="board">Loading players...</div>
+
+<script>
+
+const firebaseConfig = {
+ apiKey: "AIzaSyAiPxqKG7ZWEpfZA-PPAfBF2ov2YLdH2KQ",
+ authDomain: "golf-tournament123.firebaseapp.com",
+ projectId: "golf-tournament123",
+ storageBucket: "golf-tournament123.firebasestorage.app",
+ messagingSenderId: "1090785165873",
+ appId: "1:1090785165873:web:d1db71353eaa39ebb5cb10"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let data={};
+
+db.collection("tournament").doc("main")
+.onSnapshot(doc=>{
+if(doc.exists) data = doc.data();
+
+document.getElementById("title").innerText =
+data.tournamentName || "Tournament";
+
+render();
+});
+
+function save(){
+db.collection("tournament").doc("main").set(data);
+}
+
+//////////////////////////////////////////////////////
+// UPDATE SCORE
+//////////////////////////////////////////////////////
+
+function updateScore(g,p,h,val){
+
+let player = data.groups[g].players[p];
+
+if(!player.scores) player.scores=[];
+
+player.scores[h] = Number(val);
+
+save();
+}
+
+//////////////////////////////////////////////////////
+// LOCK (PLAYER ONLY)
+//////////////////////////////////////////////////////
+
+function lockHole(g,p,h){
+
+let player = data.groups[g].players[p];
+
+if(!player.lockedHoles) player.lockedHoles=[];
+
+player.lockedHoles[h] = true;
+
+save();
+}
+
+//////////////////////////////////////////////////////
+// TOTAL SCORE
+//////////////////////////////////////////////////////
+
+function total(scores){
+return (scores || []).reduce((a,b)=>a+b,0);
+}
+
+//////////////////////////////////////////////////////
+// LEADERBOARD
+//////////////////////////////////////////////////////
+
+function renderLeaderboard(){
+
+let list=[];
+
+(data.groups||[]).forEach(g=>{
+(g.players||[]).forEach(p=>{
+list.push({
+name:p.name,
+score: total(p.scores)
+});
+});
+});
+
+list.sort((a,b)=>a.score-b.score);
+
+let html="";
+
+list.forEach((p,i)=>{
+html+=`
+<div class="${i===0?'leader':''}">
+#${i+1} ${p.name} — ${p.score}
+</div>
+`;
+});
+
+document.getElementById("leaderboard").innerHTML=html;
+
+}
+
+//////////////////////////////////////////////////////
+// MAIN RENDER
+//////////////////////////////////////////////////////
+
+function render(){
+
+renderLeaderboard();
+
+let html="";
+
+(data.groups||[]).forEach((g,gi)=>{
+
+html+=`<div class="card"><h3>${g.name}</h3>`;
+
+(g.players||[]).forEach((p,pi)=>{
+
+html+=`
+<div class="playerRow">
+<b>${p.name}</b><br>
+
+<select id="hole-${gi}-${pi}">
+<option value="">Hole</option>
+`;
+
+(data.holes||[]).forEach((h,hi)=>{
+html+=`<option value="${hi}">${hi+1}</option>`;
+});
+
+html+=`
+</select>
+
+<select id="score-${gi}-${pi}">
+<option value="">Score</option>
+`;
+
+for(let i=1;i<=12;i++){
+html+=`<option value="${i}">${i}</option>`;
+}
+
+html+=`
+</select>
+
+<button onclick="submit(${gi},${pi})">Submit</button>
+</div>
+`;
+});
+
+html+=`</div>`;
+});
+
+document.getElementById("board").innerHTML=html;
+
+}
+
+//////////////////////////////////////////////////////
+// SUBMIT (LOCKS OWN SCORE)
+//////////////////////////////////////////////////////
+
+function submit(g,p){
+
+let hole=document.getElementById(`hole-${g}-${p}`).value;
+let score=document.getElementById(`score-${g}-${p}`).value;
+
+if(hole===""||score==="") return;
+
+let player=data.groups[g].players[p];
+
+if(!player.lockedHoles) player.lockedHoles=[];
+
+if(player.lockedHoles[hole]){
+alert("This hole is locked!");
+return;
+}
+
+updateScore(g,p,hole,score);
+lockHole(g,p,hole);
+
+}
+
+</script>
+
+</body>
+</html>
