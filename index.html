@@ -3,55 +3,74 @@
 <head>
 <title>Golf Tournament</title>
 
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
 <style>
 body{
 font-family:Arial;
-background:#0b3d0b;
+background:#1565c0;
 color:white;
 margin:0;
-padding:10px;
-text-align:center;
+padding:8px;
 }
 
-h1{margin:10px 0}
+h1{
+text-align:center;
+margin:8px 0;
+font-size:18px;
+}
 
 .card{
-background:rgba(255,255,255,0.08);
-margin:10px 0;
-padding:10px;
-border-radius:10px;
-}
-
-.playerRow{
 background:rgba(0,0,0,0.25);
 margin:8px 0;
-padding:10px;
+padding:8px;
 border-radius:10px;
 }
 
-select,button{
+.player{
+display:flex;
+justify-content:space-between;
+align-items:center;
+background:rgba(255,255,255,0.12);
 padding:6px;
-margin:3px;
-border:none;
-border-radius:6px;
+margin:6px 0;
+border-radius:8px;
+flex-wrap:wrap;
+}
+
+.name{
+font-weight:bold;
 font-size:14px;
 }
 
-button{
-background:#ffcc00;
-font-weight:bold;
+.small{
+font-size:11px;
+opacity:0.85;
 }
 
-.locked{
-opacity:0.5;
+select{
+padding:4px;
+font-size:13px;
+border-radius:6px;
+border:none;
+margin:2px;
+max-width:75px;
+}
+
+button{
+padding:5px 8px;
+border:none;
+border-radius:6px;
+background:#ffcc00;
+font-weight:bold;
+font-size:12px;
 }
 
 .leader{
-color:#00ff88;
-font-weight:bold;
+background:rgba(255,255,255,0.25);
 }
 </style>
 </head>
@@ -62,7 +81,7 @@ font-weight:bold;
 <h2 id="title">Loading...</h2>
 
 <div class="card">
-<h3>🏆 Live Leaderboard</h3>
+<h3>🏆 Leaderboard</h3>
 <div id="leaderboard">Loading...</div>
 </div>
 
@@ -82,7 +101,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-let data={};
+let data = {};
 
 db.collection("tournament").doc("main")
 .onSnapshot(doc=>{
@@ -98,9 +117,13 @@ function save(){
 db.collection("tournament").doc("main").set(data);
 }
 
-//////////////////////////////////////////////////////
-// UPDATE SCORE
-//////////////////////////////////////////////////////
+function total(scores){
+return (scores||[]).reduce((a,b)=>a+b,0);
+}
+
+function lockedCount(p){
+return (p.lockedHoles||[]).filter(x=>x).length;
+}
 
 function updateScore(g,p,h,val){
 
@@ -113,10 +136,6 @@ player.scores[h] = Number(val);
 save();
 }
 
-//////////////////////////////////////////////////////
-// LOCK (PLAYER ONLY)
-//////////////////////////////////////////////////////
-
 function lockHole(g,p,h){
 
 let player = data.groups[g].players[p];
@@ -128,17 +147,25 @@ player.lockedHoles[h] = true;
 save();
 }
 
-//////////////////////////////////////////////////////
-// TOTAL SCORE
-//////////////////////////////////////////////////////
+function submit(g,p){
 
-function total(scores){
-return (scores || []).reduce((a,b)=>a+b,0);
+let hole=document.getElementById(`hole-${g}-${p}`).value;
+let score=document.getElementById(`score-${g}-${p}`).value;
+
+if(hole===""||score==="") return;
+
+let player=data.groups[g].players[p];
+
+if(!player.lockedHoles) player.lockedHoles=[];
+
+if(player.lockedHoles[hole]){
+alert("Hole already locked!");
+return;
 }
 
-//////////////////////////////////////////////////////
-// LEADERBOARD
-//////////////////////////////////////////////////////
+updateScore(g,p,hole,score);
+lockHole(g,p,hole);
+}
 
 function renderLeaderboard(){
 
@@ -148,7 +175,9 @@ let list=[];
 (g.players||[]).forEach(p=>{
 list.push({
 name:p.name,
-score: total(p.scores)
+score:total(p.scores),
+locked:lockedCount(p),
+holes:(data.holes||[]).length
 });
 });
 });
@@ -158,20 +187,23 @@ list.sort((a,b)=>a.score-b.score);
 let html="";
 
 list.forEach((p,i)=>{
+
+let medal = (i+1)+".";
+if(i===0) medal="🥇";
+if(i===1) medal="🥈";
+if(i===2) medal="🥉";
+
 html+=`
-<div class="${i===0?'leader':''}">
-#${i+1} ${p.name} — ${p.score}
+<div class="${i===0?'leader':''}" style="padding:6px;">
+${medal} ${p.name} — ${p.score}
+<br>
+<span class="small">🔒 ${p.locked}/${p.holes}</span>
 </div>
 `;
 });
 
 document.getElementById("leaderboard").innerHTML=html;
-
 }
-
-//////////////////////////////////////////////////////
-// MAIN RENDER
-//////////////////////////////////////////////////////
 
 function render(){
 
@@ -186,9 +218,13 @@ html+=`<div class="card"><h3>${g.name}</h3>`;
 (g.players||[]).forEach((p,pi)=>{
 
 html+=`
-<div class="playerRow">
-<b>${p.name}</b><br>
+<div class="player">
+<div>
+<div class="name">${p.name} (${total(p.scores)})</div>
+<div class="small">🔒 ${lockedCount(p)}/${(data.holes||[]).length}</div>
+</div>
 
+<div>
 <select id="hole-${gi}-${pi}">
 <option value="">Hole</option>
 `;
@@ -211,7 +247,8 @@ html+=`<option value="${i}">${i}</option>`;
 html+=`
 </select>
 
-<button onclick="submit(${gi},${pi})">Submit</button>
+<button onclick="submit(${gi},${pi})">Enter</button>
+</div>
 </div>
 `;
 });
@@ -220,33 +257,6 @@ html+=`</div>`;
 });
 
 document.getElementById("board").innerHTML=html;
-
-}
-
-//////////////////////////////////////////////////////
-// SUBMIT (LOCKS OWN SCORE)
-//////////////////////////////////////////////////////
-
-function submit(g,p){
-
-alert("Submit button works!");
-
-let hole=document.getElementById(`hole-${g}-${p}`).value;
-let score=document.getElementById(`score-${g}-${p}`).value;
-
-if(hole===""||score==="") return;
-
-let player=data.groups[g].players[p];
-
-if(!player.lockedHoles) player.lockedHoles=[];
-
-if(player.lockedHoles[hole]){
-alert("This hole is locked!");
-return;
-}
-
-updateScore(g,p,hole,score);
-lockHole(g,p,hole);
 
 }
 
